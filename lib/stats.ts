@@ -158,7 +158,7 @@ export function getPerformanceInsights(stats: AppStats): {
 
   // Check data availability
   if (stats.dataHealth.filesProcessed < 3) {
-    if (status !== 'error') status = 'warning';
+    status = 'warning';
     message = 'Limited data availability';
     insights.push(`Only ${stats.dataHealth.filesProcessed} data files accessible`);
   }
