@@ -1,15 +1,16 @@
 'use client';
 
-import { SewerInspection } from '@/lib/types';
+import { SewerInspection, PaginationInfo } from '@/lib/types';
 
 interface SearchResultsProps {
   results: SewerInspection[];
   loading: boolean;
   error?: string;
-  count?: number;
+  pagination?: PaginationInfo;
+  onPageChange?: (page: number) => void;
 }
 
-export default function SearchResults({ results, loading, error, count }: SearchResultsProps) {
+export default function SearchResults({ results, loading, error, pagination, onPageChange }: SearchResultsProps) {
   if (loading) {
     return (
       <div className="bg-white dark:bg-gray-900 p-8 rounded-lg shadow-md">
@@ -46,8 +47,13 @@ export default function SearchResults({ results, loading, error, count }: Search
       {/* Results Header */}
       <div className="p-6 border-b border-gray-200 dark:border-gray-700">
         <h3 className="text-lg font-semibold text-foreground">
-          Search Results {count && `(${count} found)`}
+          Search Results {pagination && `(${pagination.totalCount} found)`}
         </h3>
+        {pagination && (
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            Showing {((pagination.currentPage - 1) * pagination.pageSize) + 1}-{Math.min(pagination.currentPage * pagination.pageSize, pagination.totalCount)} of {pagination.totalCount} results
+          </p>
+        )}
       </div>
 
       {/* Mobile Card Layout */}
@@ -86,6 +92,14 @@ export default function SearchResults({ results, loading, error, count }: Search
           </tbody>
         </table>
       </div>
+
+      {/* Pagination */}
+      {pagination && pagination.totalPages > 1 && onPageChange && (
+        <Pagination 
+          pagination={pagination}
+          onPageChange={onPageChange}
+        />
+      )}
     </div>
   );
 }
@@ -121,7 +135,7 @@ function InspectionCard({ inspection }: { inspection: SewerInspection }) {
         <div>
           <span className="text-gray-600 dark:text-gray-400">Pipe:</span>{' '}
           <span className="text-foreground">
-            {inspection.pipe?.material} - {inspection.pipe?.diameter_in}"
+            {inspection.pipe?.material} - {inspection.pipe?.diameter_in}&quot;
           </span>
         </div>
         
@@ -169,7 +183,7 @@ function InspectionRow({ inspection }: { inspection: SewerInspection }) {
           {inspection.pipe?.material}
         </div>
         <div className="text-sm text-gray-500 dark:text-gray-400">
-          {inspection.pipe?.diameter_in}" • {inspection.pipe?.age_years}y
+          {inspection.pipe?.diameter_in}&quot; • {inspection.pipe?.age_years}y
         </div>
       </td>
       
@@ -211,5 +225,95 @@ function StatusBadge({ score, needsRepair }: { score: number; needsRepair: boole
     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor()}`}>
       {getStatusText()}
     </span>
+  );
+}
+
+function Pagination({ pagination, onPageChange }: { pagination: PaginationInfo; onPageChange: (page: number) => void }) {
+  const { currentPage, totalPages, hasPreviousPage, hasNextPage } = pagination;
+
+  // Generate page numbers to show
+  const getPageNumbers = () => {
+    const pages = [];
+    const showPages = 5; // Show up to 5 page numbers
+    
+    if (totalPages <= showPages) {
+      // Show all pages if total is small
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      // Show pages around current page
+      let start = Math.max(1, currentPage - 2);
+      const end = Math.min(totalPages, start + showPages - 1);
+      
+      // Adjust start if we're near the end
+      if (end === totalPages) {
+        start = Math.max(1, end - showPages + 1);
+      }
+      
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+    }
+    
+    return pages;
+  };
+
+  const pageNumbers = getPageNumbers();
+
+  return (
+    <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-2">
+          {/* Previous Button */}
+          <button
+            onClick={() => onPageChange(currentPage - 1)}
+            disabled={!hasPreviousPage}
+            className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+              hasPreviousPage
+                ? 'text-blue-600 hover:text-blue-800 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-blue-300 dark:hover:bg-blue-900/20'
+                : 'text-gray-400 cursor-not-allowed'
+            }`}
+          >
+            Previous
+          </button>
+
+          {/* Page Numbers */}
+          <div className="flex items-center space-x-1">
+            {pageNumbers.map((pageNum) => (
+              <button
+                key={pageNum}
+                onClick={() => onPageChange(pageNum)}
+                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                  pageNum === currentPage
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-700 hover:text-blue-600 hover:bg-blue-50 dark:text-gray-300 dark:hover:text-blue-400 dark:hover:bg-blue-900/20'
+                }`}
+              >
+                {pageNum}
+              </button>
+            ))}
+          </div>
+
+          {/* Next Button */}
+          <button
+            onClick={() => onPageChange(currentPage + 1)}
+            disabled={!hasNextPage}
+            className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+              hasNextPage
+                ? 'text-blue-600 hover:text-blue-800 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-blue-300 dark:hover:bg-blue-900/20'
+                : 'text-gray-400 cursor-not-allowed'
+            }`}
+          >
+            Next
+          </button>
+        </div>
+
+        {/* Page Info */}
+        <div className="text-sm text-gray-600 dark:text-gray-400">
+          Page {currentPage} of {totalPages}
+        </div>
+      </div>
+    </div>
   );
 }

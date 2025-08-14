@@ -6,7 +6,18 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "db:import": "tsx scripts/db-import.ts import",
+    "db:resume": "tsx scripts/db-import.ts resume",
+    "db:resume:list": "tsx scripts/db-import.ts resume --list",
+    "db:status": "tsx scripts/db-import.ts status",
+    "db:validate": "tsx scripts/db-import.ts validate",
+    "db:history": "tsx scripts/db-import.ts history",
+    "db:reset": "tsx scripts/db-import.ts reset",
+    "db:vacuum": "tsx scripts/db-import.ts vacuum",
+    "db:analyze": "tsx scripts/db-import.ts analyze",
+    "db:backup": "tsx scripts/db-import.ts backup",
+    "db:cleanup": "tsx scripts/db-import.ts cleanup"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.85.0",
@@ -25,9 +36,13 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "commander": "^12.0.0",
+    "cross-env": "^7.0.3",
     "eslint": "^9",
     "eslint-config-next": "15.4.6",
     "tailwindcss": "^4",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.7.0",
     "typescript": "^5"
   }
 }

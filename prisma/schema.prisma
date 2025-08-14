@@ -1,15 +1,104 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
-  output   = "../generated/prisma"
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
+}
+
+model Inspection {
+  id                String   @id
+  timestamp_utc     DateTime
+  inspection_type   String?
+  
+  // Location fields (flattened for performance)
+  city              String
+  state             String
+  district          String?
+  street            String?
+  gps_lat           Float?
+  gps_lon           Float?
+  upstream_manhole  String?
+  downstream_manhole String?
+  
+  // Pipe fields (flattened for performance)
+  material          String
+  material_desc     String?
+  diameter_in       Int
+  length_ft         Float
+  age_years         Int?
+  shape             String?
+  install_year      Int?
+  slope_percent     Float?
+  
+  // Core inspection data
+  inspection_score  Int
+  severity_max      Int      @default(0)
+  requires_repair   Boolean
+  requires_cleaning Boolean?
+  
+  // JSON fields for complex data
+  conditions        String?  // JSON
+  equipment         String?  // JSON
+  observations      String?  // JSON
+  sensor_data       String?  // JSON
+  crew              String?  // JSON
+  
+  // Additional fields
+  duration_minutes  Int?
+  video_file        String?
+  report_generated  Boolean?
+  notes             String?
+  qc_reviewed       Boolean?
+  tags              String?  // JSON array
+  
+  // Metadata
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+  imported_at       DateTime @default(now())
+  
+  // Relations
+  defects           Defect[]
+  
+  @@map("inspections")
+}
+
+model Defect {
+  id                   Int      @id @default(autoincrement())
+  inspection_id        String
+  code                 String
+  description          String
+  severity             Int
+  distance_ft          Float
+  category             String?
+  clock_start          Int?
+  clock_end            Int?
+  dimensions           String?  // JSON
+  photo_ref            String?
+  video_timestamp_sec  Int?
+  created_at           DateTime @default(now())
+  
+  // Relations
+  inspection           Inspection @relation(fields: [inspection_id], references: [id], onDelete: Cascade)
+  
+  @@map("defects")
+}
+
+model ImportLog {
+  id                Int      @id @default(autoincrement())
+  source_file       String
+  started_at        DateTime
+  completed_at      DateTime?
+  records_processed Int      @default(0)
+  records_imported  Int      @default(0)
+  errors            Int      @default(0)
+  status            String   @default("running") // running, completed, failed
+  error_message     String?
+  created_at        DateTime @default(now())
+  
+  @@map("import_log")
 }

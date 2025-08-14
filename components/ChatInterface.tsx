@@ -5,10 +5,13 @@ import { ChatMessage } from '@/lib/types';
 
 const EXAMPLE_QUERIES = [
   "What's the average inspection score in Houston?",
-  "Find all pipes that need immediate repair",
+  "Find all pipes that need immediate repair", 
   "Which material type has the most defects?",
   "Show me inspections with severity 5 defects",
-  "What are the common problems in old pipes?"
+  "What are the common problems in old pipes?",
+  "Compare defect rates between PVC and VCP pipes",
+  "Show me repair trends over the last 5 years",
+  "Which cities have the highest percentage of pipes needing repair?"
 ];
 
 export default function ChatInterface() {
@@ -22,6 +25,8 @@ export default function ChatInterface() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState('');
+  const [showQueryDetails, setShowQueryDetails] = useState(false);
+  const [currentProgress, setCurrentProgress] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
 
@@ -42,7 +47,7 @@ export default function ChatInterface() {
         return () => clearTimeout(timeoutId);
       }
     }
-  }, [messages.length]); // Only depend on messages.length to avoid loops
+  }, [messages.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -90,8 +95,15 @@ export default function ChatInterface() {
           }
 
           if (data.content) {
-            accumulatedContent += data.content;
-            setStreamingMessage(accumulatedContent);
+            // Check if this is a progress update (contains emoji indicators)
+            if (data.content.includes('🧠') || data.content.includes('⚡') || 
+                data.content.includes('📊') || data.content.includes('🎯')) {
+              setCurrentProgress(data.content);
+            } else {
+              // Regular AI response content
+              accumulatedContent += data.content;
+              setStreamingMessage(accumulatedContent);
+            }
           }
 
           if (data.done) {
@@ -102,6 +114,7 @@ export default function ChatInterface() {
               timestamp: new Date().toISOString()
             }]);
             setStreamingMessage('');
+            setCurrentProgress('');
             setIsLoading(false);
             eventSource.close();
           }
@@ -119,6 +132,7 @@ export default function ChatInterface() {
         }]);
         setIsLoading(false);
         setStreamingMessage('');
+        setCurrentProgress('');
         eventSource.close();
       };
 
@@ -165,6 +179,26 @@ export default function ChatInterface() {
 
   return (
     <div className="flex flex-col h-full max-w-4xl mx-auto">
+      {/* Header with Controls */}
+      <div className="flex justify-between items-center mb-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+            AI-Powered Sewer Analysis
+          </h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Advanced SQL generation with complete database access
+          </p>
+        </div>
+        <button
+          onClick={() => setShowQueryDetails(!showQueryDetails)}
+          className="px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors
+                     disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={isLoading}
+        >
+          {showQueryDetails ? 'Hide' : 'Show'} Query Details
+        </button>
+      </div>
+
       {/* Example Queries */}
       {messages.length === 1 && (
         <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
@@ -181,7 +215,7 @@ export default function ChatInterface() {
                          disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={isLoading}
               >
-                "{query}"
+                &quot;{query}&quot;
               </button>
             ))}
           </div>
@@ -213,6 +247,18 @@ export default function ChatInterface() {
           </div>
         ))}
 
+        {/* Progress indicator */}
+        {currentProgress && (
+          <div className="flex justify-start">
+            <div className="max-w-3xl p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700">
+              <div className="flex items-center text-sm text-blue-700 dark:text-blue-300">
+                <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full mr-2"></div>
+                <span>{currentProgress}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Streaming message */}
         {streamingMessage && (
           <div className="flex justify-start">
@@ -229,12 +275,12 @@ export default function ChatInterface() {
         )}
 
         {/* Loading indicator */}
-        {isLoading && !streamingMessage && (
+        {isLoading && !streamingMessage && !currentProgress && (
           <div className="flex justify-start">
             <div className="max-w-3xl p-4 rounded-lg bg-gray-100 dark:bg-gray-800 text-foreground">
               <div className="flex items-center space-x-2">
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                <span className="text-sm text-gray-600 dark:text-gray-400">Thinking...</span>
+                <span className="text-sm text-gray-600 dark:text-gray-400">Initializing...</span>
               </div>
             </div>
           </div>

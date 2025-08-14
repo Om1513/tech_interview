@@ -1,13 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import SearchForm from '@/components/SearchForm';
 import SearchResults from '@/components/SearchResults';
-import { SewerInspection, SearchFilters } from '@/lib/types';
+import { SewerInspection, SearchFilters, PaginationInfo } from '@/lib/types';
 
 interface SearchResponse {
   results: SewerInspection[];
-  count: number;
+  pagination: PaginationInfo;
   filters: SearchFilters;
   error?: string;
 }
@@ -17,12 +18,12 @@ export default function SearchPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [hasSearched, setHasSearched] = useState(false);
-  const [resultCount, setResultCount] = useState<number>(0);
+  const [pagination, setPagination] = useState<PaginationInfo | undefined>();
+  const [currentFilters, setCurrentFilters] = useState<SearchFilters | undefined>();
 
-  const handleSearch = async (filters: SearchFilters) => {
+  const performSearch = async (filters: SearchFilters, page: number = 1) => {
     setLoading(true);
     setError(undefined);
-    setHasSearched(true);
 
     try {
       // Build query string from filters
@@ -34,7 +35,7 @@ export default function SearchPage() {
       if (filters.scoreMin !== undefined) params.set('minScore', filters.scoreMin.toString());
       if (filters.scoreMax !== undefined) params.set('maxScore', filters.scoreMax.toString());
       if (filters.requiresRepair !== undefined) params.set('needsRepair', filters.requiresRepair.toString());
-      if (filters.limit) params.set('limit', filters.limit.toString());
+      params.set('page', page.toString());
 
       console.log('Searching with params:', params.toString());
 
@@ -51,16 +52,28 @@ export default function SearchPage() {
       }
 
       setSearchResults(data.results);
-      setResultCount(data.count);
-      console.log(`Search completed: ${data.count} results found`);
+      setPagination(data.pagination);
+      console.log(`Search completed: ${data.pagination.totalCount} total results, ${data.results.length} on page ${page}`);
 
     } catch (err) {
       console.error('Search error:', err);
       setError(err instanceof Error ? err.message : 'Search failed');
       setSearchResults([]);
-      setResultCount(0);
+      setPagination(undefined);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSearch = async (filters: SearchFilters) => {
+    setHasSearched(true);
+    setCurrentFilters(filters);
+    await performSearch(filters, 1); // Reset to page 1 on new search
+  };
+
+  const handlePageChange = async (page: number) => {
+    if (currentFilters) {
+      await performSearch(currentFilters, page);
     }
   };
 
@@ -78,13 +91,13 @@ export default function SearchPage() {
             </div>
             
             <nav>
-              <a
+              <Link
                 href="/"
                 className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 
                          font-medium transition-colors duration-200"
               >
                 ← Back to Home
-              </a>
+              </Link>
             </nav>
           </div>
         </div>
@@ -102,7 +115,8 @@ export default function SearchPage() {
               results={searchResults}
               loading={loading}
               error={error}
-              count={resultCount}
+              pagination={pagination}
+              onPageChange={handlePageChange}
             />
           )}
 
@@ -114,8 +128,8 @@ export default function SearchPage() {
               </h3>
               <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-2xl mx-auto">
                 Use the search form above to find sewer inspection records. You can filter by city, 
-                state, inspection score range, and repair status. Results are limited to 100 records 
-                for optimal performance.
+                state, inspection score range, and repair status. Results are paginated with 10 records 
+                per page for optimal performance.
               </p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8 max-w-3xl mx-auto">
                 <div className="text-center">

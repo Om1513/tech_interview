@@ -188,7 +188,7 @@ export default function Dashboard() {
           {/* Main Navigation */}
           <div className="mb-8">
             <h2 className="text-2xl font-semibold text-foreground mb-6">Main Features</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <Link
                 href="/search"
                 className="group bg-white dark:bg-gray-900 rounded-lg p-8 border border-gray-200 dark:border-gray-700 
@@ -230,6 +230,29 @@ export default function Dashboard() {
                     </h3>
                     <p className="text-gray-600 dark:text-gray-400 mt-1">
                       Ask intelligent questions about the data and get AI-powered insights and analysis
+                    </p>
+                  </div>
+                </div>
+              </Link>
+
+              <Link
+                href="/admin"
+                className="group bg-white dark:bg-gray-900 rounded-lg p-8 border border-gray-200 dark:border-gray-700 
+                         hover:shadow-lg hover:border-purple-300 dark:hover:border-purple-600 transition-all duration-200"
+              >
+                <div className="flex items-center space-x-4">
+                  <div className="bg-purple-100 dark:bg-purple-900/30 p-3 rounded-lg group-hover:bg-purple-200 dark:group-hover:bg-purple-900/50 transition-colors">
+                    <svg className="w-8 h-8 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold text-foreground group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                      Database Admin
+                    </h3>
+                    <p className="text-gray-600 dark:text-gray-400 mt-1">
+                      Import data from S3, monitor system health, and manage the local database
                     </p>
                   </div>
                 </div>

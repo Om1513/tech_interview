@@ -1,6 +1,9 @@
 import { NextRequest } from "next/server";
 import OpenAI from "openai";
 import { getDataContext, createFocusedPrompt } from "@/lib/ai-context";
+import { generateSQLFromPrompt } from "@/lib/query-generator";
+import { executeMultipleQueries, executeSafeQuery } from "@/lib/database/query-executor";
+import { buildIntelligentContext, determineContextStrategy } from "@/lib/intelligent-context";
 
 // Initialize OpenAI client for GPT-5
 // GPT-5 Pricing: $1.25 per million input tokens, $10 per million output tokens
@@ -35,14 +38,41 @@ export async function GET(request: NextRequest) {
         // Send initial status
         controller.enqueue(`data: ${JSON.stringify({ content: "🔍 Analyzing your question...\n" })}\n\n`);
         
-        // Get relevant data context
-        console.log('Getting data context for query...');
-        const contextData = await getDataContext(query);
+        let contextData;
+        let focusedPrompt;
         
-        controller.enqueue(`data: ${JSON.stringify({ content: "📊 Found " + contextData.summary.totalRecords + " relevant inspections...\n" })}\n\n`);
-        
-        // Create focused prompt
-        const focusedPrompt = createFocusedPrompt(query, contextData);
+        try {
+          // NEW: AI-Powered SQL Generation Pipeline
+          controller.enqueue(`data: ${JSON.stringify({ content: "🧠 Generating SQL queries from your question...\n" })}\n\n`);
+          
+          const sqlGeneration = await generateSQLFromPrompt(query);
+          
+          controller.enqueue(`data: ${JSON.stringify({ content: `✅ Generated ${sqlGeneration.queries.length} optimized ${sqlGeneration.queries.length === 1 ? 'query' : 'queries'}\n` })}\n\n`);
+          
+          // Execute generated SQL queries
+          controller.enqueue(`data: ${JSON.stringify({ content: "⚡ Executing database queries...\n" })}\n\n`);
+          
+          const queryResults = await executeMultipleQueries(sqlGeneration.queries);
+          
+          const totalRows = queryResults.reduce((sum, result) => sum + result.metadata.rowCount, 0);
+          controller.enqueue(`data: ${JSON.stringify({ content: `📊 Retrieved ${totalRows} records from database\n` })}\n\n`);
+          
+          // Build intelligent context based on query results
+          controller.enqueue(`data: ${JSON.stringify({ content: "🎯 Building intelligent context for analysis...\n" })}\n\n`);
+          
+          contextData = buildIntelligentContext(queryResults, query, sqlGeneration.contextStrategy);
+          
+          // Create optimized prompt for final AI analysis
+          focusedPrompt = createIntelligentPrompt(query, contextData, sqlGeneration);
+          
+        } catch (sqlError) {
+          console.warn('SQL generation failed, falling back to legacy method:', sqlError);
+          controller.enqueue(`data: ${JSON.stringify({ content: "⚠️ Using legacy search method...\n" })}\n\n`);
+          
+          // Fallback to existing method
+          contextData = await getDataContext(query);
+          focusedPrompt = createFocusedPrompt(query, contextData);
+        }
         
         controller.enqueue(`data: ${JSON.stringify({ content: "🤖 Generating analysis...\n\n" })}\n\n`);
         
@@ -68,12 +98,35 @@ Always base your answers strictly on the provided data. If the data doesn't cont
            stream: true,
          });
         
-        // Stream the response
+        // Stream the response with backpressure handling
         try {
+          let tokenCount = 0;
+          const maxTokensPerSecond = 100; // Rate limit for smooth streaming
+          let lastTokenTime = Date.now();
+          
           for await (const chunk of completion) {
             const content = chunk.choices[0]?.delta?.content || '';
             if (content) {
-              controller.enqueue(`data: ${JSON.stringify({ content })}\n\n`);
+              tokenCount += content.split(' ').length; // Rough token count
+              
+              // Implement backpressure - pause if streaming too fast
+              if (tokenCount > maxTokensPerSecond) {
+                const timeDiff = Date.now() - lastTokenTime;
+                if (timeDiff < 1000) {
+                  await new Promise(resolve => setTimeout(resolve, 50)); // Small delay
+                }
+                tokenCount = 0;
+                lastTokenTime = Date.now();
+              }
+              
+              // Check if controller is still writable before enqueuing
+              if (controller.desiredSize !== null && controller.desiredSize > 0) {
+                controller.enqueue(`data: ${JSON.stringify({ content })}\n\n`);
+              } else {
+                // Client may have disconnected, implement graceful degradation
+                console.log('Stream backpressure detected, slowing down...');
+                await new Promise(resolve => setTimeout(resolve, 100));
+              }
             }
           }
           
@@ -137,6 +190,104 @@ Always base your answers strictly on the provided data. If the data doesn't cont
       'Access-Control-Allow-Headers': 'Content-Type',
     },
   });
+}
+
+/**
+ * Create an intelligent prompt based on SQL query results and strategy
+ */
+function createIntelligentPrompt(query: string, contextData: any, sqlGeneration: any): string {
+  const { contextStrategy } = sqlGeneration;
+  
+  // Base prompt with query and strategy
+  let prompt = `Query: ${query}\nContext Strategy: ${contextStrategy}\n\n`;
+  
+  // Add SQL query explanation for transparency
+  if (sqlGeneration.queries.length > 0) {
+    prompt += `SQL Queries Generated:\n`;
+    sqlGeneration.queries.forEach((q: any, i: number) => {
+      prompt += `${i + 1}. ${q.purpose}\n`;
+    });
+    prompt += `\n`;
+  }
+  
+  // Strategy-specific context formatting
+  switch (contextStrategy) {
+    case 'statistical':
+      prompt += formatStatisticalContext(contextData);
+      break;
+      
+    case 'comparative':
+      prompt += formatComparativeContext(contextData);
+      break;
+      
+    case 'temporal':
+      prompt += formatTemporalContext(contextData);
+      break;
+      
+    case 'detailed':
+    default:
+      prompt += formatDetailedContext(contextData);
+      break;
+  }
+  
+  return prompt;
+}
+
+function formatStatisticalContext(contextData: any): string {
+  const { summary } = contextData;
+  
+  let context = `Statistical Analysis Data:\n`;
+  context += `- Total Records Analyzed: ${summary.totalRecords}\n`;
+  
+  if (summary.aggregatedResults) {
+    context += `- Aggregated Results:\n`;
+    Object.entries(summary.aggregatedResults).forEach(([key, value]) => {
+      context += `  ${key}: ${JSON.stringify(value)}\n`;
+    });
+  }
+  
+  return context;
+}
+
+function formatComparativeContext(contextData: any): string {
+  const { summary, inspections } = contextData;
+  
+  let context = `Comparative Analysis Data:\n`;
+  context += `- Total Records: ${summary.totalRecords}\n`;
+  context += `- Records in Context: ${inspections.length}\n`;
+  
+  if (summary.categoryBreakdowns) {
+    context += `- Category Breakdowns:\n${JSON.stringify(summary.categoryBreakdowns, null, 2)}\n`;
+  }
+  
+  return context;
+}
+
+function formatTemporalContext(contextData: any): string {
+  const { summary, inspections } = contextData;
+  
+  let context = `Temporal Analysis Data:\n`;
+  context += `- Total Records: ${summary.totalRecords}\n`;
+  context += `- Time Series Points: ${inspections.length}\n`;
+  
+  if (summary.timePatterns) {
+    context += `- Time Patterns:\n${JSON.stringify(summary.timePatterns, null, 2)}\n`;
+  }
+  
+  return context;
+}
+
+function formatDetailedContext(contextData: any): string {
+  const { summary, inspections } = contextData;
+  
+  let context = `Detailed Analysis Data:\n`;
+  context += `- Total Records: ${summary.totalRecords}\n`;
+  context += `- Detailed Records: ${inspections.length}\n`;
+  
+  // Include comprehensive data
+  context += `\nDetailed Records:\n${JSON.stringify(inspections.slice(0, 10), null, 2)}`;
+  
+  return context;
 }
 
 // Handle preflight requests for CORS

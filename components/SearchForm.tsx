@@ -15,8 +15,7 @@ export default function SearchForm({ onSearch, loading }: SearchFormProps) {
     material: '',
     scoreMin: 0,
     scoreMax: 100,
-    requiresRepair: undefined,
-    limit: 100
+    requiresRepair: undefined
   });
 
   const [searchOptions, setSearchOptions] = useState<{
@@ -48,8 +47,7 @@ export default function SearchForm({ onSearch, loading }: SearchFormProps) {
           scoreMin: urlParams.get('minScore') ? Number(urlParams.get('minScore')) : 0,
           scoreMax: urlParams.get('maxScore') ? Number(urlParams.get('maxScore')) : 100,
           requiresRepair: urlParams.get('needsRepair') === 'true' ? true : 
-                         urlParams.get('needsRepair') === 'false' ? false : undefined,
-          limit: Number(urlParams.get('limit')) || 100
+                         urlParams.get('needsRepair') === 'false' ? false : undefined
         };
         
         setFilters(urlFilters);
@@ -88,8 +86,7 @@ export default function SearchForm({ onSearch, loading }: SearchFormProps) {
       material: '',
       scoreMin: 0,
       scoreMax: 100,
-      requiresRepair: undefined,
-      limit: 100
+      requiresRepair: undefined
     };
     setFilters(resetFilters);
   };
@@ -176,7 +173,7 @@ export default function SearchForm({ onSearch, loading }: SearchFormProps) {
         </div>
 
         {/* Score Range */}
-        <div className="md:col-span-2">
+        <div className="md:col-span-2 lg:col-span-1">
           <label className="block text-sm font-medium text-foreground mb-2">
             Inspection Score Range: {filters.scoreMin} - {filters.scoreMax}
           </label>
@@ -206,26 +203,6 @@ export default function SearchForm({ onSearch, loading }: SearchFormProps) {
               />
             </div>
           </div>
-        </div>
-
-        {/* Limit */}
-        <div>
-          <label htmlFor="limit" className="block text-sm font-medium text-foreground mb-2">
-            Max Results
-          </label>
-          <select
-            id="limit"
-            value={filters.limit || 100}
-            onChange={(e) => setFilters({ ...filters, limit: Number(e.target.value) })}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md 
-                     bg-background text-foreground 
-                     focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value={10}>10</option>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
         </div>
       </div>
 

@@ -1,6 +1,14 @@
 import { NextResponse } from "next/server";
-import { searchInspections, getSearchOptions } from "@/lib/search";
-import { SearchFilters } from "@/lib/types";
+import { SearchFilters, PaginationInfo } from "@/lib/types";
+
+// Import SQLite search functions
+import { searchInspections } from "@/lib/database/search";
+import { getUniqueValues, initializeDatabase } from "@/lib/database/sqlite";
+
+// Fallback to S3 search if needed
+import { searchInspections as s3SearchInspections } from "@/lib/search";
+
+const USE_DATABASE = process.env.DATABASE_MODE !== 'false';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -8,8 +16,21 @@ export async function GET(request: Request) {
   // Handle special case for getting search options
   if (searchParams.get('options') === 'true') {
     try {
-      const options = await getSearchOptions();
-      return NextResponse.json(options);
+      if (USE_DATABASE) {
+        // Initialize database if needed
+        initializeDatabase();
+        
+        // Get unique values from database
+        const cities = getUniqueValues('city');
+        const states = getUniqueValues('state');
+        
+        return NextResponse.json({ cities, states });
+      } else {
+        // Fallback to S3 (if getSearchOptions is still available)
+        const { getSearchOptions } = await import("@/lib/search");
+        const options = await getSearchOptions();
+        return NextResponse.json(options);
+      }
     } catch (error) {
       console.error('Error fetching search options:', error);
       return NextResponse.json(
@@ -20,6 +41,9 @@ export async function GET(request: Request) {
   }
   
   // Parse search filters from query parameters
+  const page = Math.max(1, Number(searchParams.get('page')) || 1);
+  const pageSize = 10; // Fixed page size
+  
   const filters: SearchFilters = {
     city: searchParams.get('city') || undefined,
     state: searchParams.get('state') || undefined,
@@ -28,22 +52,47 @@ export async function GET(request: Request) {
     scoreMax: searchParams.get('maxScore') ? Number(searchParams.get('maxScore')) : 100,
     requiresRepair: searchParams.get('needsRepair') === 'true' ? true : 
                    searchParams.get('needsRepair') === 'false' ? false : undefined,
-    limit: Math.min(Number(searchParams.get('limit')) || 100, 100) // Cap at 100
+    page: page
   };
   
-  console.log('Search API called with filters:', filters);
+  console.log(`Search API called with filters (${USE_DATABASE ? 'SQLite' : 'S3'}):`, filters, 'page:', page);
 
   try {
-    const results = await searchInspections(filters);
+    let searchResult: { results: any[], totalCount: number };
+    
+    if (USE_DATABASE) {
+      // Initialize database if needed
+      initializeDatabase();
+      
+      // Use SQLite search
+      searchResult = await searchInspections(filters, page, pageSize);
+    } else {
+      // Fallback to S3 search
+      searchResult = await s3SearchInspections(filters, page, pageSize);
+    }
+    
+    const { results, totalCount } = searchResult;
+    
+    // Calculate pagination metadata
+    const totalPages = Math.ceil(totalCount / pageSize);
+    const pagination: PaginationInfo = {
+      currentPage: page,
+      totalPages: totalPages,
+      totalCount: totalCount,
+      pageSize: pageSize,
+      hasNextPage: page < totalPages,
+      hasPreviousPage: page > 1
+    };
     
     const response = {
       results,
-      count: results.length,
+      pagination,
       filters: filters,
-      memoryUsage: process.memoryUsage()
+      memoryUsage: process.memoryUsage(),
+      source: USE_DATABASE ? 'sqlite' : 's3'
     };
     
-    console.log(`Search completed successfully: ${results.length} results found`);
+    console.log(`Search completed successfully (${USE_DATABASE ? 'SQLite' : 'S3'}): ${totalCount} total results, ${results.length} on page ${page}`);
     return NextResponse.json(response);
 
   } catch (error) {
@@ -63,6 +112,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    const page = Math.max(1, Number(body.page) || 1);
+    const pageSize = 10; // Fixed page size
+    
     const filters: SearchFilters = {
       city: body.city,
       state: body.state,
@@ -70,18 +122,43 @@ export async function POST(request: Request) {
       scoreMin: body.minScore ?? 0,
       scoreMax: body.maxScore ?? 100,
       requiresRepair: body.needsRepair,
-      limit: Math.min(body.limit || 100, 100)
+      page: page
     };
 
-    console.log('Search API POST called with filters:', filters);
+    console.log(`Search API POST called with filters (${USE_DATABASE ? 'SQLite' : 'S3'}):`, filters, 'page:', page);
 
-    const results = await searchInspections(filters);
+    let searchResult: { results: any[], totalCount: number };
+    
+    if (USE_DATABASE) {
+      // Initialize database if needed
+      initializeDatabase();
+      
+      // Use SQLite search
+      searchResult = await searchInspections(filters, page, pageSize);
+    } else {
+      // Fallback to S3 search
+      searchResult = await s3SearchInspections(filters, page, pageSize);
+    }
+    
+    const { results, totalCount } = searchResult;
+    
+    // Calculate pagination metadata
+    const totalPages = Math.ceil(totalCount / pageSize);
+    const pagination: PaginationInfo = {
+      currentPage: page,
+      totalPages: totalPages,
+      totalCount: totalCount,
+      pageSize: pageSize,
+      hasNextPage: page < totalPages,
+      hasPreviousPage: page > 1
+    };
     
     return NextResponse.json({
       results,
-      count: results.length,
+      pagination,
       filters: filters,
-      memoryUsage: process.memoryUsage()
+      memoryUsage: process.memoryUsage(),
+      source: USE_DATABASE ? 'sqlite' : 's3'
     });
 
   } catch (error) {
